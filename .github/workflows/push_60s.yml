@@ -2,8 +2,7 @@ name: Push 60s News To WeCom (Text)
 
 on:
   schedule:
-    # 每天 09:00 推送（北京时间）
-    - cron: '0 1 * * *'
+    - cron: "0 1 * * *"
   workflow_dispatch: {}
 
 jobs:
@@ -11,18 +10,41 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Call 60s API
+      - name: Fetch 60s API with Retry
         id: get60s
         run: |
-          response=$(curl -s "https://60s.viki.moe/v2/60s")
-          echo "$response"
-          echo "json=$response" >> $GITHUB_OUTPUT
+          max_retry=5
+          retry=0
+          json=""
 
-      - name: Send To WeCom Webhook (Text)
+          while [ $retry -lt $max_retry ]; do
+            echo "Fetching API... try $((retry+1))"
+            json=$(curl -s --connect-timeout 8 --max-time 15 "https://60s.viki.moe/v2/60s")
+
+            # 检查是否是有效 JSON
+            echo "$json" | jq empty >/dev/null 2>&1
+            if [ $? -eq 0 ]; then
+              echo "JSON valid"
+              break
+            else
+              echo "JSON invalid, retrying..."
+              sleep 2
+            fi
+
+            retry=$((retry+1))
+          done
+
+          if [ $retry -eq $max_retry ]; then
+            echo "Failed to fetch valid JSON after $max_retry attempts"
+            exit 1
+          fi
+
+          echo "json=$json" >> $GITHUB_OUTPUT
+
+      - name: Send To WeCom Text
         run: |
           json='${{ steps.get60s.outputs.json }}'
 
-          # 提取字段
           date=$(echo "$json" | jq -r '.data.date')
           tip=$(echo "$json" | jq -r '.data.tip')
           link=$(echo "$json" | jq -r '.data.link')
@@ -36,12 +58,9 @@ jobs:
 
           content="$content\n💡 每日一句：$tip\n\n详情：$link"
 
-          echo -e "$content"
-
-          # 推送到企业微信机器人（文本消息）
           curl -s -X POST \
             -H "Content-Type: application/json" \
-            -d "{\"msgtype\": \"text\", \"text\": {\"content\": \"$content\"}}" \
+            -d "{\"msgtype\":\"text\",\"text\":{\"content\":\"$content\"}}" \
             "$WECHAT_WEBHOOK"
 
     env:
