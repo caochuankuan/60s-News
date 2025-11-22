@@ -1,10 +1,10 @@
-name: Push 60s News To WeCom
+name: Push 60s News To WeCom (Text)
 
 on:
   schedule:
-    # 每天 09:00 推送一次（你可以改）
-    - cron: '0 1 * * *'  # UTC+0 01:00 = 北京时间 09:00
-  workflow_dispatch: {} # 手动触发
+    # 每天 09:00 推送（北京时间）
+    - cron: '0 1 * * *'
+  workflow_dispatch: {}
 
 jobs:
   push_60s:
@@ -18,24 +18,30 @@ jobs:
           echo "$response"
           echo "json=$response" >> $GITHUB_OUTPUT
 
-      - name: Send To WeCom Webhook
+      - name: Send To WeCom Webhook (Text)
         run: |
           json='${{ steps.get60s.outputs.json }}'
 
           # 提取字段
-          news=$(echo "$json" | jq -r '.data.news[]' | sed 's/^/- /')
           date=$(echo "$json" | jq -r '.data.date')
           tip=$(echo "$json" | jq -r '.data.tip')
           link=$(echo "$json" | jq -r '.data.link')
+          news=$(echo "$json" | jq -r '.data.news[]')
 
-          content="📅 *$date*\n\n📰 *60s News*\n$news\n\n💡 *每日一句*: $tip\n\n🔗 [详情查看]($link)"
+          content="📅 日期：$date\n\n📰 今日新闻：\n"
+
+          while IFS= read -r line; do
+            content="$content- $line\n"
+          done <<< "$news"
+
+          content="$content\n💡 每日一句：$tip\n\n详情：$link"
 
           echo -e "$content"
 
-          # 推送到企业微信机器人
+          # 推送到企业微信机器人（文本消息）
           curl -s -X POST \
             -H "Content-Type: application/json" \
-            -d "{\"msgtype\": \"markdown\", \"markdown\": {\"content\": \"$content\"}}" \
+            -d "{\"msgtype\": \"text\", \"text\": {\"content\": \"$content\"}}" \
             "$WECHAT_WEBHOOK"
 
     env:
