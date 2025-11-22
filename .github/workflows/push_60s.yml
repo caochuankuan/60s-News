@@ -1,0 +1,42 @@
+name: Push 60s News To WeCom
+
+on:
+  schedule:
+    # 每天 09:00 推送一次（你可以改）
+    - cron: '0 1 * * *'  # UTC+0 01:00 = 北京时间 09:00
+  workflow_dispatch: {} # 手动触发
+
+jobs:
+  push_60s:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Call 60s API
+        id: get60s
+        run: |
+          response=$(curl -s "https://60s.viki.moe/v2/60s")
+          echo "$response"
+          echo "json=$response" >> $GITHUB_OUTPUT
+
+      - name: Send To WeCom Webhook
+        run: |
+          json='${{ steps.get60s.outputs.json }}'
+
+          # 提取字段
+          news=$(echo "$json" | jq -r '.data.news[]' | sed 's/^/- /')
+          date=$(echo "$json" | jq -r '.data.date')
+          tip=$(echo "$json" | jq -r '.data.tip')
+          link=$(echo "$json" | jq -r '.data.link')
+
+          content="📅 *$date*\n\n📰 *60s News*\n$news\n\n💡 *每日一句*: $tip\n\n🔗 [详情查看]($link)"
+
+          echo -e "$content"
+
+          # 推送到企业微信机器人
+          curl -s -X POST \
+            -H "Content-Type: application/json" \
+            -d "{\"msgtype\": \"markdown\", \"markdown\": {\"content\": \"$content\"}}" \
+            "$WECHAT_WEBHOOK"
+
+    env:
+      WECHAT_WEBHOOK: ${{ secrets.WECHAT_WEBHOOK }}
