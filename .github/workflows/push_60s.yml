@@ -19,7 +19,7 @@ jobs:
 
           while [ $retry -lt $max_retry ]; do
             echo "Fetching API... try $((retry+1))"
-            json=$(curl -s --connect-timeout 8 --max-time 15 "https://60s.viki.moe/v2/60s")
+            json=$(curl -s --connect-timeout 8 --max-time 15 "http://60api.09cdn.xyz/v2/60s")
 
             # 检查是否是有效 JSON
             echo "$json" | jq empty >/dev/null 2>&1
